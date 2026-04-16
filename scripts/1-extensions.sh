@@ -34,9 +34,56 @@ EXTENSIONS=(
 
 GNOME_EXTENSIONS_DIR="$HOME/.local/share/gnome-shell/extensions"
 TMP_BASE="/tmp/ubuntu-setup-extensions"
+USER_THEMES_UUID="user-theme@gnome-shell-extensions.gcampax.github.com"
 
 mkdir -p "$GNOME_EXTENSIONS_DIR"
 mkdir -p "$TMP_BASE"
+
+# Install gnome-extensions-cli if not available
+install_gext_cli() {
+    if ! command -v gext &> /dev/null; then
+        echo "Installing gnome-extensions-cli (gext)..."
+        if command -v pip3 &> /dev/null; then
+            pip3 install --upgrade gnome-extensions-cli 2>/dev/null || \
+            sudo pip3 install --upgrade gnome-extensions-cli 2>/dev/null || true
+        fi
+        if command -v gext &> /dev/null; then
+            echo "  -> gext installed successfully"
+        fi
+    fi
+}
+
+# First install user-themes extension (required for shell themes)
+install_user_themes_extension() {
+    echo "Installing User Themes extension (required for shell themes)..."
+    if [ -d "$GNOME_EXTENSIONS_DIR/$USER_THEMES_UUID" ]; then
+        echo "  -> User Themes already installed"
+    else
+        if command -v gext &> /dev/null; then
+            gext install "$USER_THEMES_UUID" 2>/dev/null || {
+                # Manual install for user-themes
+                local zip_url="https://extensions.gnome.org/extension-data/user-theme@gnome-shell-extensions.gcampax.github.com.v46.shell-extension.zip"
+                wget -q -O "$TMP_BASE/user-theme.zip" "$zip_url" 2>/dev/null || true
+                if [ -f "$TMP_BASE/user-theme.zip" ]; then
+                    unzip -q "$TMP_BASE/user-theme.zip" -d "$TMP_BASE/user-theme-extracted"
+                    mkdir -p "$GNOME_EXTENSIONS_DIR/$USER_THEMES_UUID"
+                    cp -r "$TMP_BASE/user-theme-extracted/"* "$GNOME_EXTENSIONS_DIR/$USER_THEMES_UUID/" 2>/dev/null || true
+                fi
+            }
+        else
+            # Fallback manual install
+            local zip_url="https://extensions.gnome.org/extension-data/user-theme@gnome-shell-extensions.gcampax.github.com.v46.shell-extension.zip"
+            wget -q -O "$TMP_BASE/user-theme.zip" "$zip_url" 2>/dev/null || true
+            if [ -f "$TMP_BASE/user-theme.zip" ]; then
+                unzip -q "$TMP_BASE/user-theme.zip" -d "$TMP_BASE/user-theme-extracted"
+                mkdir -p "$GNOME_EXTENSIONS_DIR/$USER_THEMES_UUID"
+                cp -r "$TMP_BASE/user-theme-extracted/"* "$GNOME_EXTENSIONS_DIR/$USER_THEMES_UUID/" 2>/dev/null || true
+            fi
+        fi
+    fi
+    # Enable user-themes extension
+    gnome-extensions enable "$USER_THEMES_UUID" 2>/dev/null || true
+}
 
 get_download_url() {
     local ext="$1"
@@ -90,7 +137,8 @@ install_extension() {
 
     echo "Installing: $uuid"
 
-    if gnome-extensions list | grep -q "^${uuid}$"; then
+    # Check if already installed by checking directory exists
+    if [ -d "$GNOME_EXTENSIONS_DIR/$uuid" ]; then
         echo "  -> Already installed, skipping"
         return
     fi
@@ -100,25 +148,38 @@ install_extension() {
 
     if [ -n "$zip_url" ]; then
         echo "  -> Downloading extension package..."
-        if ! wget -q -O "$tmp_dir/extension.zip" "$zip_url" 2>/dev/null; then
+        if ! wget -q --show-progress -O "$tmp_dir/extension.zip" "$zip_url" 2>/dev/null; then
             echo "  -> Failed to download extension from $zip_url"
+            return
         fi
     fi
 
     if [ -f "$tmp_dir/extension.zip" ]; then
-        if gnome-extensions install --force "$tmp_dir/extension.zip" 2>/dev/null; then
-            echo "  -> Installed via gnome-extensions CLI"
+        # Clean up any existing installation
+        rm -rf "$GNOME_EXTENSIONS_DIR/$uuid"
+        mkdir -p "$GNOME_EXTENSIONS_DIR/$uuid"
+
+        # Extract to temp location
+        rm -rf "$tmp_dir/extracted"
+        unzip -q "$tmp_dir/extension.zip" -d "$tmp_dir/extracted"
+
+        # Find and copy extension files
+        if [ -d "$tmp_dir/extracted/$uuid" ]; then
+            cp -r "$tmp_dir/extracted/$uuid/"* "$GNOME_EXTENSIONS_DIR/$uuid/"
+        elif [ -d "$tmp_dir/extracted/extensions" ]; then
+            # Handle nested extensions directory
+            cp -r "$tmp_dir/extracted/extensions/$uuid/"* "$GNOME_EXTENSIONS_DIR/$uuid/" 2>/dev/null || \
+            cp -r "$tmp_dir/extracted/"* "$GNOME_EXTENSIONS_DIR/$uuid/"
         else
-            echo "  -> Falling back to manual install"
-            rm -rf "$GNOME_EXTENSIONS_DIR/$uuid"
-            mkdir -p "$GNOME_EXTENSIONS_DIR/$uuid"
-            unzip -q "$tmp_dir/extension.zip" -d "$tmp_dir/extracted"
-            if [ -d "$tmp_dir/extracted/$uuid" ]; then
-                cp -r "$tmp_dir/extracted/$uuid/"* "$GNOME_EXTENSIONS_DIR/$uuid/"
-            else
-                cp -r "$tmp_dir/extracted/"* "$GNOME_EXTENSIONS_DIR/$uuid/"
-            fi
-            echo "  -> Installed manually to $GNOME_EXTENSIONS_DIR/$uuid"
+            # Copy whatever is there
+            cp -r "$tmp_dir/extracted/"* "$GNOME_EXTENSIONS_DIR/$uuid/"
+        fi
+
+        if [ -f "$GNOME_EXTENSIONS_DIR/$uuid/metadata.json" ]; then
+            echo "  -> Installed to $GNOME_EXTENSIONS_DIR/$uuid"
+        else
+            echo "  -> Warning: metadata.json not found, extension may not be properly installed"
+            ls -la "$GNOME_EXTENSIONS_DIR/$uuid/" 2>/dev/null || true
         fi
     else
         echo "  -> No extension package available; skipping $uuid"
@@ -128,16 +189,35 @@ install_extension() {
 echo "Installing GNOME Shell Extensions..."
 echo ""
 
+# Install gext CLI tool
+install_gext_cli
+
+# Install user-themes first (required for shell themes)
+install_user_themes_extension
+
+echo ""
+echo "Installing extensions..."
 for ext in "${EXTENSIONS[@]}"; do
     install_extension "$ext"
 done
 
 echo ""
 echo "Enabling extensions..."
+# Enable user-themes first
+gnome-extensions enable "$USER_THEMES_UUID" 2>/dev/null || true
+
+# Enable all extensions
 for ext in "${EXTENSIONS[@]}"; do
-    gnome-extensions enable "$ext" 2>/dev/null || true
+    if [ -d "$GNOME_EXTENSIONS_DIR/$ext" ]; then
+        gnome-extensions enable "$ext" 2>/dev/null && echo "  -> Enabled: $ext" || echo "  -> Failed to enable: $ext"
+    fi
 done
 
 echo ""
 echo "Extensions installation complete!"
+echo ""
+echo "Installed extensions:"
+ls -la "$GNOME_EXTENSIONS_DIR/" 2>/dev/null || echo "  (No extensions found)"
+echo ""
 echo "Note: Some extensions may require GNOME Shell restart to take effect."
+echo "To restart GNOME Shell, press: Alt+F2, then type 'r', then Enter"

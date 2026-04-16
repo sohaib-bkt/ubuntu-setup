@@ -43,6 +43,11 @@ check_dependencies
 echo "Installing GNOME Tweaks and Extension Manager..."
 sudo apt install -y gnome-tweaks
 sudo apt install -y gnome-shell-extension-manager
+
+# Install gnome-extensions-cli for better extension management
+echo "Installing gnome-extensions-cli..."
+pip3 install --upgrade gnome-extensions-cli 2>/dev/null || sudo pip3 install --upgrade gnome-extensions-cli 2>/dev/null || true
+
 echo "Additional packages installed."
 echo ""
 
