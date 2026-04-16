@@ -7,16 +7,21 @@
 
 set -e
 
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 THEMES_DIR="$HOME/.themes"
 CURSOR_DIR="$HOME/.icons"
+CURSOR_DIR_LOCAL="$HOME/.local/share/icons"
 TMP_DIR="/tmp/ubuntu-setup-themes"
 
 mkdir -p "$THEMES_DIR"
 mkdir -p "$CURSOR_DIR"
+mkdir -p "$CURSOR_DIR_LOCAL"
 mkdir -p "$TMP_DIR"
 
 MACTQHOE_REPO="https://github.com/vinceliuice/MacTahoe-gtk-theme.git"
 BIBATA_URL="https://www.gnome-look.org/content/get.php?id=1197198"
+BIBATA_PAGE_URL="https://www.gnome-look.org/p/1197198"
+BIBATA_LOCAL_ARCHIVE="$REPO_DIR/Bibata-Modern-Ice.tar.xz"
 
 echo "Installing Themes..."
 echo ""
@@ -86,29 +91,47 @@ install_bibata() {
         return
     fi
 
-    echo "  -> Downloading Bibata cursor theme..."
-    wget -q --show-progress -O "$TMP_DIR/Bibata.tar.gz" "$BIBATA_URL" 2>/dev/null || {
-        echo "  -> Failed to download Bibata from gnome-look.org"
-        echo "  -> Try manual download from: https://www.gnome-look.org/p/1197198"
-        return
-    }
+    if [ -f "$BIBATA_LOCAL_ARCHIVE" ]; then
+        echo "  -> Installing Bibata from local archive: $BIBATA_LOCAL_ARCHIVE"
+        tar -xJf "$BIBATA_LOCAL_ARCHIVE" -C "$TMP_DIR/" 2>/dev/null || {
+            echo "  -> Local archive extract failed, falling back to download"
+            rm -f "$TMP_DIR/Bibata.tar.gz"
+        }
+    fi
 
-    echo "  -> Extracting..."
-    tar -xzf "$TMP_DIR/Bibata.tar.gz" -C "$TMP_DIR/" 2>/dev/null || {
-        # Try unzip if it's a zip file
-        unzip -q -o "$TMP_DIR/Bibata.tar.gz" -d "$TMP_DIR/" 2>/dev/null || true
-    }
+    if [ ! -d "$TMP_DIR/Bibata-Modern-Ice" ]; then
+        echo "  -> Downloading Bibata cursor theme..."
+        wget -q --show-progress -O "$TMP_DIR/Bibata.tar.gz" "$BIBATA_URL" 2>/dev/null || {
+            echo "  -> Failed to download Bibata from gnome-look.org"
+            echo "  -> Try manual download from: $BIBATA_PAGE_URL"
+            return
+        }
+
+        echo "  -> Extracting..."
+        tar -xzf "$TMP_DIR/Bibata.tar.gz" -C "$TMP_DIR/" 2>/dev/null || {
+            # Try unpacking xz or zip if needed
+            tar -xJf "$TMP_DIR/Bibata.tar.gz" -C "$TMP_DIR/" 2>/dev/null || \
+            unzip -q -o "$TMP_DIR/Bibata.tar.gz" -d "$TMP_DIR/" 2>/dev/null || true
+        }
+    fi
 
     # Find and install the cursor theme
     if [ -d "$TMP_DIR/Bibata-Modern-Ice" ]; then
         cp -r "$TMP_DIR/Bibata-Modern-Ice" "$CURSOR_DIR/"
+        cp -r "$TMP_DIR/Bibata-Modern-Ice" "$CURSOR_DIR_LOCAL/"
         echo "  -> Bibata cursor theme installed"
     elif [ -d "$TMP_DIR"/Bibata* ]; then
         cp -r "$TMP_DIR"/Bibata* "$CURSOR_DIR/"
+        cp -r "$TMP_DIR"/Bibata* "$CURSOR_DIR_LOCAL/"
         echo "  -> Bibata cursor theme installed"
     else
         echo "  -> Could not find Bibata cursor theme in archive"
         ls -la "$TMP_DIR/" 2>/dev/null || true
+    fi
+
+    if command -v dconf &> /dev/null; then
+        dconf write /org/gnome/desktop/interface/cursor-theme "'Bibata-Modern-Ice'" || true
+        echo "  -> Cursor theme set to Bibata-Modern-Ice"
     fi
 }
 

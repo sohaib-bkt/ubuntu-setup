@@ -46,6 +46,7 @@ You can also run individual scripts:
 - GNOME 42+
 - `dconf` CLI tool
 - `git`
+- `gnome-tweaks` (installed automatically by the script)
 
 ## Extensions Installed
 

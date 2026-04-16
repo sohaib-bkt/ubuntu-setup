@@ -18,18 +18,33 @@ fi
 # Check for required tools
 check_dependencies() {
     echo "Checking dependencies..."
-    local deps=("dconf" "git")
+    local deps=("dconf" "git" "wget" "unzip" "gnome-tweaks" "gnome-shell-extensions")
+    local missing=()
+
     for dep in "${deps[@]}"; do
         if ! command -v "$dep" &> /dev/null; then
-            echo "Installing $dep..."
-            sudo apt-get update && sudo apt-get install -y "$dep"
+            missing+=("$dep")
         fi
     done
+
+    if [ ${#missing[@]} -gt 0 ]; then
+        echo "Installing missing dependencies: ${missing[*]}"
+        sudo apt-get update
+        sudo apt-get install -y "${missing[@]}"
+    fi
+
     echo "Dependencies OK."
     echo ""
 }
 
 check_dependencies
+
+# Install additional packages
+echo "Installing GNOME Tweaks and Extension Manager..."
+sudo apt install -y gnome-tweaks
+sudo apt install -y gnome-shell-extension-manager
+echo "Additional packages installed."
+echo ""
 
 # Interactive menu
 show_menu() {

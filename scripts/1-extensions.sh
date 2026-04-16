@@ -32,74 +32,96 @@ EXTENSIONS=(
     "volume-scroller@exti"
 )
 
-install_extension() {
-    local ext="$1"
-    echo "Installing: $ext"
+GNOME_EXTENSIONS_DIR="$HOME/.local/share/gnome-shell/extensions"
+TMP_BASE="/tmp/ubuntu-setup-extensions"
 
-    if gnome-extensions list | grep -q "^${ext}"; then
+mkdir -p "$GNOME_EXTENSIONS_DIR"
+mkdir -p "$TMP_BASE"
+
+get_download_url() {
+    local ext="$1"
+    case "$ext" in
+        blur-my-shell@aunetx)
+            echo "https://extensions.gnome.org/extension-data/blur-my-shellaunetx.v46.shell-extension.zip"
+            ;;
+        custom-window-controls@mattr4y)
+            echo "https://extensions.gnome.org/extension-data/custom-window-controlsmattr4y.v24.shell-extension.zip"
+            ;;
+        dash-to-dock@micahg)
+            echo "https://extensions.gnome.org/extension-data/dash-to-dockmicahg.github.com.v78.shell-extension.zip"
+            ;;
+        ding@rastersoft.com)
+            echo "https://extensions.gnome.org/extension-data/dingrastersoft.com.v67.shell-extension.zip"
+            ;;
+        forge@jmmaranan.com)
+            echo "https://extensions.gnome.org/extension-data/forgedmmaranan.com.v52.shell-extension.zip"
+            ;;
+        just-perfection@just-perfection)
+            echo "https://extensions.gnome.org/extension-data/just-perfectionjust-perfection.v22.shell-extension.zip"
+            ;;
+        openbar@ob)
+            echo "https://extensions.gnome.org/extension-data/openbarob.v60.shell-extension.zip"
+            ;;
+        p7-borders@YashPm)
+            echo "https://extensions.gnome.org/extension-data/p7-bordersYashPm.v20.shell-extension.zip"
+            ;;
+        tiling-assistant@Ubuntu.com)
+            echo "https://extensions.gnome.org/extension-data/tiling-assistantUbuntu.com.v46.shell-extension.zip"
+            ;;
+        ubuntu-appindicators@ubuntu.com)
+            echo "https://extensions.gnome.org/extension-data/ubuntu-appindicatorsubuntu.com.v87.shell-extension.zip"
+            ;;
+        ubuntu-dock@ubuntu.com)
+            echo "https://extensions.gnome.org/extension-data/ubuntu-dockubuntu.com.v68.shell-extension.zip"
+            ;;
+        volume-scroller@exti)
+            echo "https://extensions.gnome.org/extension-data/volume-scrollerexti.v14.shell-extension.zip"
+            ;;
+        *)
+            echo ""
+            ;;
+    esac
+}
+
+install_extension() {
+    local uuid="$1"
+    local tmp_dir="$TMP_BASE/$uuid"
+    mkdir -p "$tmp_dir"
+
+    echo "Installing: $uuid"
+
+    if gnome-extensions list | grep -q "^${uuid}$"; then
         echo "  -> Already installed, skipping"
         return
     fi
 
-    # Try installing via gnome-extensions CLI first
-    if gnome-extensions install "$ext" 2>/dev/null; then
-        echo "  -> Installed via gnome-extensions CLI"
-        return
-    fi
-
-    # Fallback: download and install from GitHub
-    echo "  -> Trying alternative installation method..."
-
-    # Extract extension UUID from package name
-    local uuid="${ext}"
-    local zip_url=""
-
-    case "$ext" in
-        *@aunetx)
-            zip_url="https://extensions.gnome.org/extension-data/blur-my-shellaunetx.v46.shell-extension.zip"
-            ;;
-        *@mattr4y)
-            zip_url="https://extensions.gnome.org/extension-data/custom-window-controlsmattr4y.v24.shell-extension.zip"
-            ;;
-        *@micahg)
-            zip_url="https://extensions.gnome.org/extension-data/dash-to-dockmicahg.github.com.v78.shell-extension.zip"
-            ;;
-        *@rastersoft.com)
-            zip_url="https://extensions.gnome.org/extension-data/dingrastersoft.com.v67.shell-extension.zip"
-            ;;
-        *@jmmaranan.com)
-            zip_url="https://extensions.gnome.org/extension-data/forgedmmaranan.com.v52.shell-extension.zip"
-            ;;
-        *@just-perfection)
-            zip_url="https://extensions.gnome.org/extension-data/just-perfectionjust-perfection.v22.shell-extension.zip"
-            ;;
-        *@ob)
-            zip_url="https://extensions.gnome.org/extension-data/openbarob.v60.shell-extension.zip"
-            ;;
-        *@YashPm)
-            zip_url="https://extensions.gnome.org/extension-data/p7-bordersYashPm.v20.shell-extension.zip"
-            ;;
-        *@Ubuntu.com)
-            zip_url="https://extensions.gnome.org/extension-data/tiling-assistantUbuntu.com.v46.shell-extension.zip"
-            ;;
-        *@ubuntu.com)
-            zip_url="https://extensions.gnome.org/extension-data/ubuntu-appindicatorsubuntu.com.v87.shell-extension.zip"
-            ;;
-        *@exti)
-            zip_url="https://extensions.gnome.org/extension-data/volume-scrollerexti.v14.shell-extension.zip"
-            ;;
-    esac
+    local zip_url
+    zip_url="$(get_download_url "$uuid")"
 
     if [ -n "$zip_url" ]; then
-        local tmp_dir="/tmp/gnome-ext-install"
-        mkdir -p "$tmp_dir"
-        wget -q -O "$tmp_dir/ext.zip" "$zip_url" 2>/dev/null && \
-            gnome-extensions install --force "$tmp_dir/ext.zip" 2>/dev/null && \
-            echo "  -> Installed via download" || \
-            echo "  -> Failed to install $ext"
-        rm -rf "$tmp_dir"
+        echo "  -> Downloading extension package..."
+        if ! wget -q -O "$tmp_dir/extension.zip" "$zip_url" 2>/dev/null; then
+            echo "  -> Failed to download extension from $zip_url"
+        fi
+    fi
+
+    if [ -f "$tmp_dir/extension.zip" ]; then
+        if gnome-extensions install --force "$tmp_dir/extension.zip" 2>/dev/null; then
+            echo "  -> Installed via gnome-extensions CLI"
+        else
+            echo "  -> Falling back to manual install"
+            rm -rf "$GNOME_EXTENSIONS_DIR/$uuid"
+            mkdir -p "$GNOME_EXTENSIONS_DIR/$uuid"
+            unzip -q "$tmp_dir/extension.zip" -d "$tmp_dir/extracted"
+            if [ -d "$tmp_dir/extracted/$uuid" ]; then
+                cp -r "$tmp_dir/extracted/$uuid/"* "$GNOME_EXTENSIONS_DIR/$uuid/"
+            else
+                cp -r "$tmp_dir/extracted/"* "$GNOME_EXTENSIONS_DIR/$uuid/"
+            fi
+            echo "  -> Installed manually to $GNOME_EXTENSIONS_DIR/$uuid"
+        fi
     else
-        echo "  -> Could not determine download URL"
+        echo "  -> No extension package available; skipping $uuid"
     fi
 }
 
