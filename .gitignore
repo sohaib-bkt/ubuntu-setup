@@ -1,0 +1,18 @@
+# Backup files
+backup/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local theme/icon files (these are copied from your local system)
+*.ttf
+*.otf
+*.zip
+
+# Log files
+*.log
+
+# Temporary files
+*.tmp
+.cache/
