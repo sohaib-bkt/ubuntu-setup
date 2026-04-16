@@ -2,72 +2,122 @@
 
 # Themes Installation Script
 # Installs:
-# - MacTahoe-Light-purple (GTK/Shell theme)
+# - MacTahoe (GTK/Shell theme) - from GitHub
 # - Bibata-Modern-Ice (Cursor theme)
 
 set -e
 
 THEMES_DIR="$HOME/.themes"
 CURSOR_DIR="$HOME/.icons"
+TMP_DIR="/tmp/ubuntu-setup-themes"
 
 mkdir -p "$THEMES_DIR"
 mkdir -p "$CURSOR_DIR"
+mkdir -p "$TMP_DIR"
 
-install_theme() {
-    local name="$1"
-    local source_dir="$2"
-    local dest_dir="$3"
-    local theme_type="$4"
-
-    echo "Installing $theme_type theme: $name"
-
-    if [ -d "$dest_dir/$name" ]; then
-        echo "  -> $name already installed, skipping"
-        return
-    fi
-
-    if [ -d "$source_dir/$name" ]; then
-        cp -r "$source_dir/$name" "$dest_dir/"
-        echo "  -> Copied from local source: $source_dir/$name"
-    else
-        echo "  -> Theme not found in source directory"
-        echo "  -> Please add the theme to: $source_dir/$name"
-    fi
-}
+MACTQHOE_REPO="https://github.com/vinceliuice/MacTahoe-gtk-theme.git"
+BIBATA_URL="https://www.gnome-look.org/content/get.php?id=1197198"
 
 echo "Installing Themes..."
 echo ""
 
-# Check for local theme sources
-LOCAL_THEMES_DIR="$HOME/.themes"
-LOCAL_ICONS_DIR="$HOME/.icons"
+# Install MacTahoe theme
+install_mactahoe() {
+    echo "Installing MacTahoe theme..."
 
-# MacTahoe-Light-purple (GTK/Shell)
-install_theme "MacTahoe-Light-purple" "$LOCAL_THEMES_DIR" "$THEMES_DIR" "GTK/Shell"
-
-# Check for other MacTahoe variants
-for variant in Dark Dark-blue Dark-green Dark-grey Dark-orange Dark-pink; do
-    if [ -d "$LOCAL_THEMES_DIR/MacTahoe-$variant" ]; then
-        install_theme "MacTahoe-$variant" "$LOCAL_THEMES_DIR" "$THEMES_DIR" "GTK/Shell"
+    if [ -d "$THEMES_DIR/MacTahoe-Light-purple" ]; then
+        echo "  -> MacTahoe-Light-purple already installed, skipping"
+        return
     fi
-done
 
-# Everforest themes
-for variant in "" -MB-Light -MB-Light-hdpi -MB-Light-xhdpi; do
-    if [ -d "$LOCAL_THEMES_DIR/Everforest$variant" ]; then
-        install_theme "Everforest$variant" "$LOCAL_THEMES_DIR" "$THEMES_DIR" "GTK/Shell"
+    # Check for required dependencies
+    install_dependencies() {
+        local deps=("sassc" "libglib2.0-dev-bin" "libxml2-utils")
+        local missing=()
+
+        for dep in "${deps[@]}"; do
+            if ! dpkg -s "$dep" &> /dev/null 2>&1; then
+                missing+=("$dep")
+            fi
+        done
+
+        if [ ${#missing[@]} -gt 0 ]; then
+            echo "  -> Installing dependencies: ${missing[*]}"
+            sudo apt-get update
+            sudo apt-get install -y "${missing[@]}" 2>/dev/null || \
+            sudo apt-get install -y sassc libglib2.0-dev libxml2-utils 2>/dev/null || true
+        fi
+    }
+
+    install_dependencies
+
+    if command -v git &> /dev/null; then
+        echo "  -> Cloning MacTahoe repository..."
+        rm -rf "$TMP_DIR/MacTahoe"
+        git clone --depth 1 "$MACTQHOE_REPO" "$TMP_DIR/MacTahoe" 2>/dev/null
+
+        if [ -d "$TMP_DIR/MacTahoe" ]; then
+            echo "  -> Installing MacTahoe themes..."
+            cd "$TMP_DIR/MacTahoe"
+
+            # Install with purple accent and light color
+            ./install.sh -t purple -c light -l 2>/dev/null || {
+                # Fallback: copy themes manually
+                mkdir -p "$THEMES_DIR"
+                cp -r "$TMP_DIR/MacTahoe/themes/"* "$THEMES_DIR/"
+            }
+            echo "  -> MacTahoe theme installed"
+            cd - > /dev/null
+        else
+            echo "  -> Failed to clone MacTahoe repository"
+        fi
+    else
+        echo "  -> git not installed, cannot download MacTahoe"
+        echo "  -> Install git with: sudo apt install git"
     fi
-done
+}
 
-# Gruvbox themes
-for variant in -Plus-Dark -Plus-Light; do
-    if [ -d "$LOCAL_THEMES_DIR/Gruvbox$variant" ]; then
-        install_theme "Gruvbox$variant" "$LOCAL_THEMES_DIR" "$THEMES_DIR" "GTK/Shell"
+# Install Bibata cursor theme
+install_bibata() {
+    echo "Installing Bibata cursor theme..."
+
+    if [ -d "$CURSOR_DIR/Bibata-Modern-Ice" ]; then
+        echo "  -> Bibata-Modern-Ice already installed, skipping"
+        return
     fi
-done
 
-# Bibata cursor theme
-install_theme "Bibata-Modern-Ice" "$LOCAL_ICONS_DIR" "$CURSOR_DIR" "Cursor"
+    echo "  -> Downloading Bibata cursor theme..."
+    wget -q --show-progress -O "$TMP_DIR/Bibata.tar.gz" "$BIBATA_URL" 2>/dev/null || {
+        echo "  -> Failed to download Bibata from gnome-look.org"
+        echo "  -> Try manual download from: https://www.gnome-look.org/p/1197198"
+        return
+    }
+
+    echo "  -> Extracting..."
+    tar -xzf "$TMP_DIR/Bibata.tar.gz" -C "$TMP_DIR/" 2>/dev/null || {
+        # Try unzip if it's a zip file
+        unzip -q -o "$TMP_DIR/Bibata.tar.gz" -d "$TMP_DIR/" 2>/dev/null || true
+    }
+
+    # Find and install the cursor theme
+    if [ -d "$TMP_DIR/Bibata-Modern-Ice" ]; then
+        cp -r "$TMP_DIR/Bibata-Modern-Ice" "$CURSOR_DIR/"
+        echo "  -> Bibata cursor theme installed"
+    elif [ -d "$TMP_DIR"/Bibata* ]; then
+        cp -r "$TMP_DIR"/Bibata* "$CURSOR_DIR/"
+        echo "  -> Bibata cursor theme installed"
+    else
+        echo "  -> Could not find Bibata cursor theme in archive"
+        ls -la "$TMP_DIR/" 2>/dev/null || true
+    fi
+}
+
+install_mactahoe
+echo ""
+install_bibata
+
+# Cleanup
+rm -rf "$TMP_DIR"
 
 echo ""
 echo "Themes installation complete!"
