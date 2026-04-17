@@ -157,10 +157,6 @@ if command -v dconf &> /dev/null; then
     echo "  -> Cursor theme set to '$CURSOR_THEME_NAME'" || \
     echo "  -> Failed to set cursor theme"
 
-    # Set shell theme
-    dconf write /org/gnome/shell/extensions/user-theme/name "'$SHELL_THEME_NAME'" 2>/dev/null && \
-    echo "  -> Shell theme set to '$SHELL_THEME_NAME'" || \
-    echo "  -> Failed to set shell theme (make sure User Themes extension is enabled)"
 else
     echo "  -> dconf not available, skipping theme application"
 fi
